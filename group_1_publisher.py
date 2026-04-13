@@ -56,17 +56,18 @@ class PublisherGUI:
     # GUI setup.
     def gui_setup(self):
         self.root.title("Publisher")
-        self.root.geometry("400x400")
+        self.root.geometry("600x400")
 
-        self.text = tk.Text(self.root, height=15, width=40)
+        self.text = tk.Text(self.root, height=15, width=60)
         self.text.pack(pady=10)
 
-        tk.Button(self.root, text="Start", command=self.start).pack(pady=10)
-        tk.Button(self.root, text="Stop", command=self.stop).pack(pady=10)
+        tk.Button(self.root, text="Start", command=self.start, width=10).pack(side=tk.LEFT, padx=150)
+        tk.Button(self.root, text="Stop", command=self.stop, width=10).pack(side=tk.LEFT)
 
     # Log class that stores the data into a message and inserts it into a message.
     def log(self, message):
         self.text.insert(tk.END, message + "\n")
+        self.text.see(tk.END)
 
     # Start class that starts publishing the data to the log on a thread.
     def start(self):
