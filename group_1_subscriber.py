@@ -7,26 +7,46 @@ import json
 
 # Broker connection and Topic.
 ### TEMPORARY. Just for testing locally.
-BROKER = "127.0.0.1"
-TOPIC = "TOPIC"
+BROKER = "test.mosquitto.org"
+PORT = 1883
+TOPIC = "TEMPERATURE"
 
 # Subscriber class that receives data from the broker.
-class Subscriber:
+class Subscriber_A:
     def __init__(self, log):
         self.running = False
         self.client = mqtt.Client()
         self.log = log
 
-    # Decode data class that decodes the incoming data from the broker and sends it to the log.
     def decode_data(self, client, userdata, message):
-        data = json.loads(message.payload.decode())
-        value = data["value"]
-        self.log(f"Received: {value}")
+        try:
+            data = json.loads(message.payload.decode())
+    
+            # Handle RESET event
+            if "event" in data:
+                if data["event"] == "RESET":
+                    self.log("Publisher RESET received")
+                elif data["event"] == "STOP":
+                    self.log("Publisher STOP received")
+                return
+    
+            # Handle normal data
+            if "value" in data:
+                value = data["value"]
+                self.log(f"Received: {value}")
+    
+        except Exception as e:
+            self.log(f"Error processing message: {e}")
+        
+    def on_connect(self, client, userdata, flags, rc):
+        self.log("Connected to broker")
+        client.subscribe(TOPIC)    
     
     # Start class that connects to the broker and receives the formatted data.
     def start(self):
+        self.client.on_connect = self.on_connect
         self.client.on_message = self.decode_data
-        self.client.connect(BROKER)
+        self.client.connect(BROKER, PORT, 60)
         self.client.subscribe(TOPIC)
         self.client.loop_start()
         self.running = True
@@ -60,8 +80,11 @@ class SubscriberGUI:
 
     # Log class that stores the data into a message and inserts it into a message.
     def log(self, message):
+        self.root.after(0, self._log_safe, message)
+    
+    def _log_safe(self, message):
         self.text.insert(tk.END, message + "\n")
-        self.text.see(tk.END)
+        self.text.see(tk.END)  
 
     # Start class that starts receiving the published data to the log.
     def start(self):
