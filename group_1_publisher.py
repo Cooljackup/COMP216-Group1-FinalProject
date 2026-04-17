@@ -65,13 +65,14 @@ class Publisher:
             # If the block skip doesn't happen, generates a normal value.
             else:
                 value = self.generator.get_value()
-                data = self.format_data(value)
 
                 # Wild data value with a range of -50 and 150 that happens in about 1 in every 100 transmissions. 
                 if random.random() < 0.01:
                     value = random.uniform(-50, 150)
                     log(f"ERROR. Wild data value of {value} was transmissioned!")
 
+                data = self.format_data(value)
+                
                 # Missed transmission that happens in about 1 in every 100 transmissions.
                 if random.random() < 0.01:
                     log("ERROR. Packet lost. Transmission skipped.")
