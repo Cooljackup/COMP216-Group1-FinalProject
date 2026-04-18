@@ -12,6 +12,9 @@ import threading
 # Import DataGenerator.
 from group_1_data_generator import DataGenerator
 
+# Import EmailAlert.
+from group_1_emailAlert import EmailAlert
+
 # Broker connection and Topic.
 BROKER = "test.mosquitto.org"
 PORT = 1883
@@ -32,7 +35,10 @@ class Publisher:
         self.wild_chance = 0.10
         self.loss_chance = 0.10
         self.state = "STOPPED"
-    
+        
+        self.email_alert = EmailAlert()
+        self.emailAddresses = [] # ADD EMAILS HERE!
+        
     # Format data class that formats the data into a json.
     def format_data(self, value):
         return json.dumps({"packet_id": str(uuid.uuid4()), "timestamp": time.time(), "value": value})
@@ -76,6 +82,10 @@ class Publisher:
                 if random.random() < self.wild_chance:
                     value = random.uniform(-150, 150)
                     log(f"ERROR. Wild data value of {value} was transmitted!")
+                    
+                    # sends email alert to all subscribed emails in the array.
+                    for email in self.emailAddresses:
+                        self.email_alert.send_alert(email, "Bad Data Alert", f"A wild data value of {value} was sent!")
 
                 data = self.format_data(value)
                 
