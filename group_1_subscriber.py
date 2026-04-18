@@ -23,6 +23,8 @@ class Subscriber:
         self.update_ui = update_ui
 
     def decode_data(self, client, userdata, message):
+        if not self.running: #Stopping new callbacks from running after the subscriber has hit stop.
+            return
         try:
             data = json.loads(message.payload.decode())
     
@@ -65,9 +67,9 @@ class Subscriber:
 
     # Stop class that disconnects from the broker.
     def stop(self):
+        self.running = False
         self.client.loop_stop()
         self.client.disconnect()
-        self.running = False
 
 # SubscriberGUI class that creates and displays the GUI.
 class SubscriberGUI:
