@@ -20,12 +20,17 @@ TOPIC = "TEMPERATURE"
 # Publisher class that sends the data to the broker.
 class Publisher:
     def __init__(self):
+
+        # Instance variables.
         self.client = mqtt.Client()
         self.generator = DataGenerator()
         self.running = False
         self.interval = 10  # default
         self.skip_block = False
         self.skip_count = 0
+        self.block_chance = 0.10
+        self.wild_chance = 0.10
+        self.loss_chance = 0.10
         self.state = "STOPPED"
     
     # Format data class that formats the data into a json.
@@ -33,7 +38,7 @@ class Publisher:
         return json.dumps({"packet_id": str(uuid.uuid4()), "timestamp": time.time(), "value": value})
     
     # Start class that connects to the broker and sends the formatted data as a json and stores it as a log variable.
-    def start(self, log, get_interval):
+    def start(self, log, get_interval, get_settings):
         self.client.connect(BROKER, PORT, 60)
         self.client.loop_start()
         self.running = True
@@ -47,11 +52,12 @@ class Publisher:
         # Runs while status is set to running.
         while self.running:
             self.interval = get_interval()
+            self.interval, self.block_chance, self.wild_chance, self.loss_chance = get_settings()
 
-            # Random block skip between 3 and 10 that happens in about 1 in every 100 transmissions.
-            if not self.skip_block and random.random() < 0.01:
+            # Random block skip between 3 and 5 that happens about roughly 10% of the time. (Customizable.)
+            if not self.skip_block and random.random() < self.block_chance:
                 self.skip_block = True
-                self.skip_count = random.randint(3, 10)
+                self.skip_count = random.randint(3, 5)
                 log(f"ERROR. Block skip started with a total of {self.skip_count} blocked transmissions.")
 
             if self.skip_block:
@@ -66,15 +72,15 @@ class Publisher:
             else:
                 value = self.generator.get_value()
 
-                # Wild data value with a range of -50 and 150 that happens in about 1 in every 100 transmissions. 
-                if random.random() < 0.01:
-                    value = random.uniform(-50, 150)
-                    log(f"ERROR. Wild data value of {value} was transmissioned!")
+                # Wild data value with a range of -150 and 150 that happens about roughly 10% of the time. (Customizable.)
+                if random.random() < self.wild_chance:
+                    value = random.uniform(-150, 150)
+                    log(f"ERROR. Wild data value of {value} was transmitted!")
 
                 data = self.format_data(value)
                 
-                # Missed transmission that happens in about 1 in every 100 transmissions.
-                if random.random() < 0.01:
+                # Missed transmission that happens about roughly 10% of the time. (Customizable.)
+                if random.random() < self.loss_chance:
                     log("ERROR. Packet lost. Transmission skipped.")
                 else:
                     self.client.publish(TOPIC, data)
@@ -95,7 +101,7 @@ class Publisher:
         self.running = False
         self.state = "STOPPED"
         
-        #
+        # Formats the stop message and sends the message to notify the subscribers that the publisher is shutting down.
         stop_message = json.dumps({"event": "STOP", "timestamp": time.time()})
         try:
             self.client.publish(TOPIC, stop_message)
@@ -108,6 +114,8 @@ class Publisher:
 # PublisherGUI class that creates and displays the GUI.
 class PublisherGUI:
     def __init__(self, root):
+
+        # Instance variables.
         self.root = root
         self.publisher = Publisher()
         self.gui_setup()
@@ -117,22 +125,21 @@ class PublisherGUI:
 
     # GUI setup.
     def gui_setup(self):
+
+        # Instance variables.
         self.interval_var = tk.StringVar(value="10 seconds")
-        intervals = {
-            "1 second": 1,
-            "5 seconds": 5,
-            "10 seconds": 10,
-            "Hourly": 3600,
-            "Daily": 86400,
-            "Weekly": 604800,
-            "Monthly": 2592000
-        }
+        self.block_var = tk.StringVar(value="10%")
+        self.wild_var = tk.StringVar(value="10%")
+        self.loss_var = tk.StringVar(value="10%")
+        intervals = {"1 second": 1, "5 seconds": 5, "10 seconds": 10, "Hourly": 3600, "Daily": 86400, "Weekly": 604800, "Monthly": 2592000}
         self.interval_map = intervals
+        percentages = {"0%": 0, "10%": 10, "20%": 20, "30%": 30, "40%": 40, "50%": 50, "60%": 60, "70%": 70, "80%": 80, "90%": 90, "100%": 100}
+        self.percentage_map = percentages
         
         # Main window properties.
-        self.root.title("Publisher")
+        self.root.title(f"Publisher - {TOPIC}")
         self.root.geometry("800x500")
-        self.root.minsize(500, 300)
+        self.root.minsize(500, 425)
         self.root.grid_columnconfigure(1, minsize=200)
 
         # Grid layout configuration. (2 columns: Left = Log, Right = Controls.)
@@ -161,10 +168,29 @@ class PublisherGUI:
         right_frame.rowconfigure(99, weight=1)
 
         tk.Label(right_frame, text="Settings", font=("Arial", 12, "bold")).grid(row=0, column=0, pady=10, sticky="n")
-        tk.Label(right_frame, text="Send Interval").grid(row=1, column=0, pady=5, sticky="w", padx=10)
+
+        # Send Interval.
+        tk.Label(right_frame, text="Send Interval:").grid(row=1, column=0, pady=5, sticky="w", padx=10)
         dropdown = tk.OptionMenu(right_frame, self.interval_var, *intervals.keys())
         dropdown.grid(row=2, column=0, padx=10, sticky="ew")
-        tk.Button(right_frame, text="Reset", command=self.reset).grid(row=3, column=0, pady=20, sticky="ew")
+
+        # Packet loss.
+        tk.Label(right_frame, text="Packet Loss %:").grid(row=5, column=0, pady=5, sticky="w", padx=10)
+        dropdown = tk.OptionMenu(right_frame, self.loss_var, *percentages.keys())
+        dropdown.grid(row=6, column=0, padx=10, sticky="ew")
+
+        # Wild Value.
+        tk.Label(right_frame, text="Wild Value %:").grid(row=7, column=0, pady=5, sticky="w", padx=10)
+        dropdown = tk.OptionMenu(right_frame, self.wild_var, *percentages.keys())
+        dropdown.grid(row=8, column=0, padx=10, sticky="ew")
+
+        # Block Skip.
+        tk.Label(right_frame, text="Block Skip %:").grid(row=9, column=0, pady=5, sticky="w", padx=10)
+        dropdown = tk.OptionMenu(right_frame, self.block_var, *percentages.keys())
+        dropdown.grid(row=10, column=0, padx=10, sticky="ew")
+        
+        # Reset.
+        tk.Button(right_frame, text="Reset", command=self.reset).grid(row=11, column=0, pady=75, sticky="ew")
 
         # Bottom row & content. (Underneath left column.)
         button_frame = tk.Frame(left_frame)
@@ -184,11 +210,16 @@ class PublisherGUI:
             self.log("ERROR. Already running!")
             return
         
+        # Gets the selected interval from the dropdown and converts it into seconds.
         def get_interval():
             return self.interval_map[self.interval_var.get()]
         
+        # Gets all random chance settings from the dropdowns and converts them into percentages.
+        def get_settings():
+            return (self.interval_map[self.interval_var.get()], self.percentage_map[self.block_var.get()] / 100, self.percentage_map[self.wild_var.get()] / 100, self.percentage_map[self.loss_var.get()] / 100)
+        
         self.log("Publisher has been started.")
-        threading.Thread(target=self.publisher.start, args=(self.log, get_interval), daemon=True).start()
+        threading.Thread(target=self.publisher.start, args=(self.log, get_interval, get_settings), daemon=True).start()
 
     # Stop class that stops publishing data.
     def stop(self):
@@ -197,8 +228,11 @@ class PublisherGUI:
         
     # Reset class that resets the publisher.
     def reset(self):
-        # Resets interval.
+        # Resets interval and percentage variables.
         self.interval_var.set("10 seconds")
+        self.block_var.set("10%")
+        self.wild_var.set("10%")
+        self.loss_var.set("10%")
         
         # Clears the log window.
         self.text.delete("1.0", tk.END)
