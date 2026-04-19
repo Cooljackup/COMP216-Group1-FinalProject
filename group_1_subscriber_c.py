@@ -13,13 +13,14 @@ open_windows = 0
 
 # Subscriber class that receives data from the broker.
 class Subscriber:
-    def __init__(self, log):
+    def __init__(self, log, update_graph):
 
         # Instance variables.
         self.running = False
         self.log = log
-        self.minimum_temperature = 38
-        self.maximum_temperature = 62
+        self.update_graph = update_graph
+        self.minimum_temperature = 35
+        self.maximum_temperature = 65
 
     def decode_data(self, client, userdata, message):
         if not self.running: #Stopping new callbacks from running after the subscriber has hit stop.
@@ -45,9 +46,13 @@ class Subscriber:
                 else:
                     self.log(f"Received: {value}")
     
+                # 
+                self.update_graph(value)
+                
         except Exception as error:
             self.log(f"ERROR. There was an error processing the message: {error}.")
         
+    # On connect class to handle connecting to the broker with the selected topic.
     def on_connect(self, client, userdata, flags, rc):
         self.log("Connected to broker.")
         client.subscribe(TOPIC)    
@@ -78,10 +83,20 @@ class SubscriberGUI:
         open_windows += 1
         self.bar_min = 35
         self.bar_max = 65
-        self.subscriber = Subscriber(self.log)
+        self.subscriber = Subscriber(self.log, self.update_graph)
+        self.history = []
+        self.max_points = 60
+        self.graph_dimensions_left = 50
+        self.graph_dimensions_right = 740
+        self.graph_dimensions_top = 50
+        self.graph_dimensions_bottom = 325
+        self.graph_width = self.graph_dimensions_right - self.graph_dimensions_left
+        self.graph_height = self.graph_dimensions_bottom - self.graph_dimensions_top
+        self.graph_grid_steps_x = 10
+        self.graph_grid_steps_y = 10
         self.gui_setup()
 
-        # To properly close the program.
+        # To properly close the window.
         self.root.protocol("WM_DELETE_WINDOW", self.close)
     
     # Close class to handle closing a window and handle closing the program when there are no windows left.
@@ -100,22 +115,49 @@ class SubscriberGUI:
     # GUI setup.
     def gui_setup(self):
         self.root.title(f"Subscriber - {TOPIC}")
-        self.root.geometry("800x500")
-        self.root.minsize(500, 425)
+        self.root.geometry("800x600")
+        self.root.minsize(800, 600)
 
         # Grid layout. (1 column, 3 rows.)
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=4)
-        self.root.rowconfigure(1, weight=1)
+        self.root.rowconfigure(0, weight=5)
+        self.root.rowconfigure(1, weight=2)
         self.root.rowconfigure(2, weight=0)
 
         # Row 1. Temperature.
         right_frame = tk.Frame(self.root, bd=2, relief="groove")
         right_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
+        self.graph = tk.Canvas(right_frame, bg="black", height=250)
+        self.graph.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Title, grid lines, & graph box.
+        self.graph.create_text((self.graph_dimensions_left + self.graph_dimensions_right) / 2, self.graph_dimensions_top - 25, text="Temperature", fill="white", font=("Arial", 12, "bold"))
+        for i in range(self.graph_grid_steps_x + 1):
+            x = self.graph_dimensions_left + i * ((self.graph_dimensions_right - self.graph_dimensions_left) / self.graph_grid_steps_x)
+            self.graph.create_line(x, self.graph_dimensions_top, x, self.graph_dimensions_bottom, fill="#333333")
+        for i in range(self.graph_grid_steps_y + 1):
+            y = self.graph_dimensions_top + i * ((self.graph_dimensions_bottom - self.graph_dimensions_top) / self.graph_grid_steps_y)
+            self.graph.create_line(self.graph_dimensions_left, y, self.graph_dimensions_right, y, fill="#333333")
+        self.graph.create_rectangle(self.graph_dimensions_left, self.graph_dimensions_top, self.graph_dimensions_right, self.graph_dimensions_bottom, outline="white")
+
+        # Degrees & degrees title.
+        steps = 15
+        graph_height = self.graph_dimensions_bottom - self.graph_dimensions_top
+        for i in range(steps + 1):
+            val = self.bar_min + i * (self.bar_max - self.bar_min) / steps
+            ratio = i / steps
+            y = self.graph_dimensions_bottom - (ratio * graph_height)
+            self.graph.create_text(self.graph_dimensions_left - 15, y, text=f"{val:.0f}", fill="white", font=("Arial", 10))
+        self.graph.create_text(self.graph_dimensions_left - 40, (self.graph_dimensions_top + self.graph_dimensions_bottom) / 2, text="Degrees (°C)", fill="white", font=("Arial", 10), angle=90)
+
+        # Samples title.
+        self.graph.create_text((self.graph_dimensions_left + self.graph_dimensions_right) / 2, self.graph_dimensions_bottom + 20, text="Samples", fill="white", font=("Arial", 10))
+
         # Row 2. Log.
-        left_frame = tk.Frame(self.root)
+        left_frame = tk.Frame(self.root, height=120)
         left_frame.grid(row=1, column=0, sticky="nsew")
+        left_frame.grid_propagate(False)
         left_frame.rowconfigure(0, weight=1)
         left_frame.columnconfigure(0, weight=1)
 
@@ -142,6 +184,27 @@ class SubscriberGUI:
     def _log_safe(self, message):
         self.text.insert(tk.END, message + "\n")
         self.text.see(tk.END)
+
+    # Update graph class to update the graph when a value is received.
+    def update_graph(self, value):
+
+        self.history.append(value)
+        if len(self.history) > self.max_points:
+            self.history.pop(0)
+        self.graph.delete("line")
+        if len(self.history) < 2:
+            return
+
+        points = []
+        for i, v in enumerate(self.history):
+            x = self.graph_dimensions_left + i * (self.graph_dimensions_right - self.graph_dimensions_left) / (self.max_points - 1)
+            v = max(self.bar_min, min(self.bar_max, v))
+            ratio = (v - self.bar_min) / (self.bar_max - self.bar_min)
+            y = self.graph_dimensions_bottom - (ratio * (self.graph_dimensions_bottom - self.graph_dimensions_top))
+            points.append((x, y))
+
+        for i in range(len(points) - 1):
+            self.graph.create_line(points[i][0], points[i][1], points[i+1][0], points[i+1][1], fill="lime", width=2, tags="line")
     
     # Open new window class that allows more than one Subscriber window open at a time.
     def open_new_window(self):
