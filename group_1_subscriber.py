@@ -8,7 +8,7 @@ import json
 # Broker connection and Topic.
 BROKER = "test.mosquitto.org"
 PORT = 1883
-TOPIC = "TEMPERATURE"
+TOPIC = [("TEMPERATURE_1", 0), ("TEMPERATURE_2", 0), ("TEMPERATURE_3", 0)]
 
 # Subscriber class that receives data from the broker.
 class Subscriber:
@@ -44,7 +44,7 @@ class Subscriber:
                 if value < self.minimum_temperature or value > self.maximum_temperature:
                     self.log(f"ERROR: Wild value detected: {value}")
                 else:
-                    self.log(f"Received: {value}")
+                    self.log(f"Received: {value} from topic {message.topic}")
 
                 # Update GUI.
                 self.update_ui(value)
@@ -61,7 +61,6 @@ class Subscriber:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.decode_data
         self.client.connect(BROKER, PORT, 60)
-        self.client.subscribe(TOPIC)
         self.client.loop_start()
         self.running = True
 
@@ -87,10 +86,11 @@ class SubscriberGUI:
 
     # GUI setup.
     def gui_setup(self):
-        self.root.title(f"Subscriber - {TOPIC}")
-        self.root.geometry("800x500")
-        self.root.minsize(500, 425)
-        self.root.grid_columnconfigure(1, minsize=200)
+        for topic in TOPIC:
+            self.root.title(f"Subscriber - {topic}")
+            self.root.geometry("800x500")
+            self.root.minsize(500, 425)
+            self.root.grid_columnconfigure(1, minsize=200)
 
         # Grid layout configuration. (2 columns: Left = Log, Right = Temperature bar.)
         self.root.columnconfigure(0, weight=3)

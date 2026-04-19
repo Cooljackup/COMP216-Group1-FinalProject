@@ -18,7 +18,7 @@ from group_1_emailAlert import EmailAlert
 # Broker connection and Topic.
 BROKER = "test.mosquitto.org"
 PORT = 1883
-TOPIC = "TEMPERATURE_1"
+TOPIC = "TEMPERATURE_3"
 
 # Publisher class that sends the data to the broker.
 class Publisher:
