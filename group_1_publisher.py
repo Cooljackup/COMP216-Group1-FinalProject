@@ -114,7 +114,7 @@ class Publisher:
         self.state = "STOPPED"
         
         # Formats the stop message and sends the message to notify the subscribers that the publisher is shutting down.
-        stop_message = json.dumps({"event": "STOP", "timestamp": time.time()})
+        stop_message = json.dumps({"event": "STOP", "publisher_id": self.publisher_id, "timestamp": time.time()})
         try:
             self.client.publish(TOPIC, stop_message)
         except:
