@@ -195,6 +195,10 @@ class SubscriberGUI:
     
     # Start class that starts receiving the published data to the log.
     def start(self):
+        if self.subscriber.running:
+            self.log("ERROR: Subscriber is already running.")
+            return
+
         self.log("Subscriber has been started.")
         self.subscriber.start()
     
