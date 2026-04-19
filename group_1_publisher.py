@@ -29,6 +29,7 @@ class Publisher:
         self.client = mqtt.Client()
         self.generator = DataGenerator()
         self.running = False
+        self.publisher_id = str(uuid.uuid4())
         self.interval = 10  # default
         self.skip_block = False
         self.skip_count = 0
@@ -42,7 +43,7 @@ class Publisher:
         
     # Format data class that formats the data into a json.
     def format_data(self, value):
-        return json.dumps({"packet_id": str(uuid.uuid4()), "timestamp": time.time(), "value": value})
+        return json.dumps({"publisher_id": self.publisher_id, "packet_id": str(uuid.uuid4()), "timestamp": time.time(), "value": value})
     
     # Start class that connects to the broker and sends the formatted data as a json and stores it as a log variable.
     def start(self, log, get_interval, get_settings):
