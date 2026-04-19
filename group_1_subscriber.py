@@ -5,10 +5,11 @@ import tkinter as tk
 import paho.mqtt.client as mqtt
 import json
 
-# Broker connection and Topic.
+# Broker connection and Topic with amount of open windows.
 BROKER = "test.mosquitto.org"
 PORT = 1883
 TOPIC = "TEMPERATURE"
+open_windows = 0
 
 # Subscriber class that receives data from the broker.
 class Subscriber:
@@ -73,18 +74,36 @@ class Subscriber:
 
 # SubscriberGUI class that creates and displays the GUI.
 class SubscriberGUI:
-    def __init__(self, root):
+    def __init__(self, root, app_root):
 
         # Instance variables.
         self.root = root
+        self.app_root = app_root
         self.subscriber = Subscriber(self.log, self.update_bar)
+        global open_windows
+        open_windows += 1
         self.bar_min = 35
         self.bar_max = 65
         self.gui_setup()
 
         # To properly close the program.
-        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+    
+    # Close class to handle closing a window and handle closing the program when there are no windows left.
+    def close(self):
+        global open_windows
 
+        try:
+            self.subscriber.stop()
+        except:
+            pass
+
+        open_windows -= 1
+        self.root.destroy()
+
+        if open_windows == 0:
+            self.app_root.quit()
+    
     # GUI setup.
     def gui_setup(self):
         self.root.title(f"Subscriber - {TOPIC}")
@@ -138,6 +157,8 @@ class SubscriberGUI:
         tk.Button(button_frame, text="Start", command=self.start, width=10).pack(side=tk.LEFT, padx=5)
         tk.Button(button_frame, text="Stop", command=self.stop, width=10).pack(side=tk.LEFT, padx=5)
 
+        tk.Button(button_frame, text="New Subscriber", command=self.open_new_window, width=15).pack(side=tk.LEFT, padx=5)
+
     # Log class that stores the data into a message and inserts it into a message.
     def log(self, message):
         self.root.after(0, self._log_safe, message)
@@ -166,7 +187,12 @@ class SubscriberGUI:
         self.canvas.coords(self.bar, 50, top_y, 90, 340)
         self.canvas.itemconfig(self.bar, fill="green")
         self.value_label.config(text=f"Current: {value:.2f}")
-
+    
+    # Open new window class that allows more than one Subscriber window open at a time.
+    def open_new_window(self):
+        new_window = tk.Toplevel(self.app_root)
+        SubscriberGUI(new_window, self.app_root)
+    
     # Start class that starts receiving the published data to the log.
     def start(self):
         self.log("Subscriber has been started.")
@@ -180,5 +206,7 @@ class SubscriberGUI:
 # Main class to run Subscriber.
 if __name__ == "__main__":
     root = tk.Tk()
-    app = SubscriberGUI(root)
+    root.withdraw()
+    first_window = tk.Toplevel(root)
+    SubscriberGUI(first_window, root)
     root.mainloop()

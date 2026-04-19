@@ -15,10 +15,11 @@ from group_1_data_generator import DataGenerator
 # Import EmailAlert.
 from group_1_emailAlert import EmailAlert
 
-# Broker connection and Topic.
+# Broker connection and Topic with amount of open windows.
 BROKER = "test.mosquitto.org"
 PORT = 1883
 TOPIC = "TEMPERATURE"
+open_windows = 0
 
 # Publisher class that sends the data to the broker.
 class Publisher:
@@ -123,15 +124,33 @@ class Publisher:
 
 # PublisherGUI class that creates and displays the GUI.
 class PublisherGUI:
-    def __init__(self, root):
+    def __init__(self, root, app_root):
 
         # Instance variables.
         self.root = root
+        self.app_root = app_root
         self.publisher = Publisher()
+        global open_windows
+        open_windows += 1
         self.gui_setup()
 
         # To properly close the program.
-        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+
+    # Close class to handle closing a window and handle closing the program when there are no windows left.
+    def close(self):
+        global open_windows
+
+        try:
+            self.publisher.stop()
+        except:
+            pass
+
+        open_windows -= 1
+        self.root.destroy()
+        
+        if open_windows == 0:
+            self.app_root.quit()
 
     # GUI setup.
     def gui_setup(self):
@@ -209,11 +228,18 @@ class PublisherGUI:
         tk.Button(button_frame, text="Start", command=self.start, width=10).pack(side=tk.LEFT, padx=5)
         tk.Button(button_frame, text="Stop", command=self.stop, width=10).pack(side=tk.LEFT, padx=5)
 
+        tk.Button(button_frame, text="New Publisher", command=self.open_new_window, width=15).pack(side=tk.LEFT, padx=5)
+
     # Log class that stores the data into a message and inserts it into a message.
     def log(self, message):
         self.text.insert(tk.END, message + "\n")
         self.text.see(tk.END)
 
+    # Open new window class that allows more than one Publisher window open at a time.
+    def open_new_window(self):
+        new_win = tk.Toplevel(self.app_root)
+        PublisherGUI(new_win, self.app_root)
+    
     # Start class that starts publishing the data to the log on a thread.
     def start(self):
         if self.publisher.running:
@@ -260,5 +286,7 @@ class PublisherGUI:
 # Main class to run Publisher.
 if __name__ == "__main__":
     root = tk.Tk()
-    app = PublisherGUI(root)
+    root.withdraw()
+    first_window = tk.Toplevel(root)
+    PublisherGUI(first_window, root)
     root.mainloop()
