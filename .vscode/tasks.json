@@ -1,0 +1,58 @@
+//in vsc ctrl+shift+p -> Tasks: Run Task -> Run All
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Run Publisher",
+			"command": "python",
+			"args": ["group_1_publisher.py"],
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+			}
+			
+		},
+		{
+			"type": "shell",
+			"label": "Run Subscriber_A",
+			"command": "python",
+			"args": ["group_1_subscriber.py"],
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+			}
+		},
+		 {
+			"type": "shell",
+			"label": "Run Subscriber_B",
+			"command": "python",
+			"args": ["group_1_subscriber_b.py"],
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+			}
+		},
+		 {
+			"type": "shell",
+			"label": "Run Subscriber_C",
+			"command": "python",
+			"args": ["group_1_subscriber_c.py"],
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+			}
+		},
+		{
+			"label": "Run All",
+			"dependsOn": [
+				"Run Publisher",
+				"Run Subscriber_A",
+				"Run Subscriber_B",
+				"Run Subscriber_C"
+			],
+			"dependsOrder": "parallel"
+		}
+
+	]
+}
