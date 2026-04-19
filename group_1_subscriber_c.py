@@ -13,15 +13,13 @@ open_windows = 0
 
 # Subscriber class that receives data from the broker.
 class Subscriber:
-    def __init__(self, log, update_ui):
+    def __init__(self, log):
 
         # Instance variables.
         self.running = False
-        self.client = mqtt.Client()
         self.log = log
         self.minimum_temperature = 38
         self.maximum_temperature = 62
-        self.update_ui = update_ui
 
     def decode_data(self, client, userdata, message):
         if not self.running: #Stopping new callbacks from running after the subscriber has hit stop.
@@ -46,9 +44,6 @@ class Subscriber:
                     self.log(f"ERROR: Wild value detected: {value}")
                 else:
                     self.log(f"Received: {value}")
-
-                # Update GUI.
-                self.update_ui(value)
     
         except Exception as error:
             self.log(f"ERROR. There was an error processing the message: {error}.")
@@ -59,12 +54,12 @@ class Subscriber:
     
     # Start class that connects to the broker and receives the formatted data.
     def start(self):
+        self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.decode_data
-        self.client.connect(BROKER, PORT, 60)
-        self.client.subscribe(TOPIC)
-        self.client.loop_start()
         self.running = True
+        self.client.connect(BROKER, PORT, 60)
+        self.client.loop_start()
 
     # Stop class that disconnects from the broker.
     def stop(self):
@@ -79,11 +74,11 @@ class SubscriberGUI:
         # Instance variables.
         self.root = root
         self.app_root = app_root
-        self.subscriber = Subscriber(self.log, self.update_bar)
         global open_windows
         open_windows += 1
         self.bar_min = 35
         self.bar_max = 65
+        self.subscriber = Subscriber(self.log)
         self.gui_setup()
 
         # To properly close the program.
@@ -92,7 +87,6 @@ class SubscriberGUI:
     # Close class to handle closing a window and handle closing the program when there are no windows left.
     def close(self):
         global open_windows
-
         try:
             self.subscriber.stop()
         except:
@@ -100,7 +94,6 @@ class SubscriberGUI:
 
         open_windows -= 1
         self.root.destroy()
-
         if open_windows == 0:
             self.app_root.quit()
     
@@ -109,16 +102,20 @@ class SubscriberGUI:
         self.root.title(f"Subscriber - {TOPIC}")
         self.root.geometry("800x500")
         self.root.minsize(500, 425)
-        self.root.grid_columnconfigure(1, minsize=200)
 
-        # Grid layout configuration. (2 columns: Left = Log, Right = Temperature bar.)
-        self.root.columnconfigure(0, weight=3)
-        self.root.columnconfigure(1, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        # Grid layout. (1 column, 3 rows.)
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=4)
+        self.root.rowconfigure(1, weight=1)
+        self.root.rowconfigure(2, weight=0)
 
-        # Left column & content. (Text log & scrollbars.)
+        # Row 1. Temperature.
+        right_frame = tk.Frame(self.root, bd=2, relief="groove")
+        right_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+
+        # Row 2. Log.
         left_frame = tk.Frame(self.root)
-        left_frame.grid(row=0, column=0, sticky="nsew")
+        left_frame.grid(row=1, column=0, sticky="nsew")
         left_frame.rowconfigure(0, weight=1)
         left_frame.columnconfigure(0, weight=1)
 
@@ -130,33 +127,12 @@ class SubscriberGUI:
         scroll_x = tk.Scrollbar(left_frame, orient="horizontal", command=self.text.xview)
         scroll_x.grid(row=1, column=0, sticky="ew")
 
-        # Right column & content. (Temperature bar.)
-        right_frame = tk.Frame(self.root, bd=2, relief="groove")
-        right_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-
-        self.canvas = tk.Canvas(right_frame, width=120, height=380)
-        self.canvas.pack(pady=10)
-        self.canvas.create_rectangle(10, 10, 110, 340, fill="black", outline="silver", width=2)
-
-        label_val = self.bar_min
-        steps = 30
-        for i in range(steps + 1):
-            y = 335 - i * (320 / steps)
-            self.canvas.create_text(30, y, text=f"{label_val:.0f}", fill="white", font=("Arial", 7))
-            label_val += (self.bar_max - self.bar_min) / steps
-
-        self.bar = self.canvas.create_rectangle(50, 340, 90, 340, fill="red")
-
-        self.value_label = tk.Label(right_frame, text="Current: --")
-        self.value_label.pack()
-
-        # Bottom row & content. (Underneath left column.)
-        button_frame = tk.Frame(left_frame)
+        # Row 3. Buttons.
+        button_frame = tk.Frame(self.root)
         button_frame.grid(row=2, column=0, pady=5)
 
         tk.Button(button_frame, text="Start", command=self.start, width=10).pack(side=tk.LEFT, padx=5)
         tk.Button(button_frame, text="Stop", command=self.stop, width=10).pack(side=tk.LEFT, padx=5)
-
         tk.Button(button_frame, text="New Subscriber", command=self.open_new_window, width=15).pack(side=tk.LEFT, padx=5)
 
     # Log class that stores the data into a message and inserts it into a message.
@@ -166,27 +142,6 @@ class SubscriberGUI:
     def _log_safe(self, message):
         self.text.insert(tk.END, message + "\n")
         self.text.see(tk.END)
-
-    # Update bar.
-    def update_bar(self, value):
-        self.root.after(0, self._update_bar_safe, value)
-
-    def _update_bar_safe(self, value):
-        is_wild = (value < self.subscriber.minimum_temperature or value > self.subscriber.maximum_temperature)
-
-        # If the value transmitted is wild, it turns the bar yellow and doesn't update bar.
-        if is_wild:
-            color = "yellow"
-            self.canvas.itemconfig(self.bar, fill=color)
-            return
-
-        # Updates bar if normal.
-        display_value = max(self.bar_min, min(self.bar_max, value))
-        ratio = (display_value - self.bar_min) / (self.bar_max - self.bar_min)
-        top_y = 340 - ratio * 320
-        self.canvas.coords(self.bar, 50, top_y, 90, 340)
-        self.canvas.itemconfig(self.bar, fill="green")
-        self.value_label.config(text=f"Current: {value:.2f}")
     
     # Open new window class that allows more than one Subscriber window open at a time.
     def open_new_window(self):
